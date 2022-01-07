@@ -1,14 +1,15 @@
 #[macro_use]
 extern crate diesel;
 extern crate dotenv;
+extern crate log;
 
 mod db;
 
-use std::env;
-
 use chrono::{DateTime, NaiveDateTime, Utc};
 use dotenv::dotenv;
+use log::{error, info, trace};
 use serde::Deserialize;
+use std::env;
 use tokio::signal;
 use tokio::time::{interval, Duration};
 
@@ -39,8 +40,8 @@ struct Measurement {
 }
 
 fn is_window_open(latest_temperature: &f64, temperature: &f64) -> bool {
-    println!(
-        "{} - {} = {}",
+    trace!(
+        "calculate: {} - {} = {}",
         temperature,
         latest_temperature,
         temperature - latest_temperature
@@ -75,8 +76,10 @@ async fn check(temperatures: &Vec<f64>, device_name: &str) -> Result<(), reqwest
         Some(latest_temperature) => {
             for temperature in temperatures.iter().skip(1) {
                 if is_window_open(latest_temperature, temperature) {
-                    // FIXME: remove
-                    println!("ALERT {:?} {:?}", device_name, temperature);
+                    info!(
+                        "send alert for room {} (latest temp: {} / temp: {})",
+                        device_name, latest_temperature, temperature
+                    );
                     send_notification(device_name).await?;
                     break;
                 }
@@ -101,9 +104,11 @@ pub async fn run() -> Result<(), reqwest::Error> {
         .join(",");
 
     // request device data
+    let body = format!("phoneid={}&deviceids={}", phone_id, device_ids);
+    trace!("request data for {}", body);
     let data = reqwest::Client::new()
         .post("https://www.data199.com/api/pv1/device/lastmeasurement")
-        .body(format!("phoneid={}&deviceids={}", phone_id, device_ids))
+        .body(body)
         .header("Content-Type", "application/x-www-form-urlencoded")
         .send()
         .await?
@@ -120,12 +125,10 @@ pub async fn run() -> Result<(), reqwest::Error> {
             Some(device) => {
                 let id = device.id;
                 let measurement = &measurement_device.measurement;
-
                 let time = DateTime::<Utc>::from_utc(
                     NaiveDateTime::from_timestamp(measurement.ts.into(), 0),
                     Utc,
                 );
-
                 match db::measurement_exists(&connection, id, &time) {
                     Ok(exists) => {
                         if !exists {
@@ -138,18 +141,18 @@ pub async fn run() -> Result<(), reqwest::Error> {
                                 measurement.h2,
                             );
                             match db::insert_measurement(&connection, &new_measurement) {
-                                Ok(_) => (),
-                                Err(e) => todo!("handle error"),
+                                Ok(_) => trace!("new measurement has been inserted into database: {:?}", new_measurement),                                
+                                Err(e) => error!("inserting a new measurement ({:?}) failed: {}", new_measurement, e),
                             }
                             if device.alert {
                                 devices_to_check.push(device.clone());
                             }
                         }
                     }
-                    Err(e) => todo!("handle error"),
+                    Err(e) => error!("check for existence of measurement with device_id={} and time={} failed: {}", id, time, e),
                 }
             }
-            None => (),
+            None => error!("find no matching device for result device {:?}", measurement_device),
         }
     }
 
@@ -164,7 +167,7 @@ pub async fn run() -> Result<(), reqwest::Error> {
                 ));
             }
         }
-        Err(_) => todo!("handle error"),
+        Err(e) => error!("getting measurements for devices ({:?}) failed: {}", devices_to_check, e),
     }
 
     for value in temperatures {
@@ -180,7 +183,7 @@ async fn manage_timer() {
         interval.tick().await;
         let result = run().await;
         if result.is_err() {
-            println!("Error: {:?}", result.err());
+            error!("error: {:?}", result.err());
         }
     }
 }
@@ -188,9 +191,14 @@ async fn manage_timer() {
 #[tokio::main]
 async fn main() {
     dotenv().ok();
+    env_logger::init();
+
+    trace!("starting up");
 
     // start a timer
     tokio::spawn(manage_timer());
     // wait until ctrl_c has been pressed
     signal::ctrl_c().await.expect("failed to listen for ctrl_c");
+
+    trace!("shutdown");
 }

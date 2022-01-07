@@ -31,7 +31,7 @@ pub struct Measurement {
     pub humidity_outside: Option<f64>,
 }
 
-#[derive(Insertable)]
+#[derive(Insertable, Debug)]
 #[table_name = "measurements"]
 pub struct NewMeasurement<'a> {
     pub device_id: i32,
