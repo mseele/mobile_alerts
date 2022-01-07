@@ -153,13 +153,10 @@ pub async fn run() -> Result<(), reqwest::Error> {
         }
     }
 
-    // let devices_to_check= devices.iter().filter(|device| device.alert).map(|device|device.clone()).collect::<Vec<_>>();
-
     let mut temperatures: Vec<(&String, Vec<f64>)> = Vec::new();
 
     match db::get_measurements(&connection, &devices_to_check) {
         Ok(values) => {
-            println!("{:?}", values);
             for value in values {
                 temperatures.push((
                     &value.0.name,
