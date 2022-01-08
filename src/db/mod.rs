@@ -102,11 +102,12 @@ pub fn insert_measurement(
 pub fn get_measurements<'a>(
     connection: &PgConnection,
     devices: &'a Vec<Device>,
+    measurement_count: i64,
 ) -> Result<Vec<(&'a Device, Vec<Measurement>)>, Error> {
     use schema::measurements::dsl::*;
 
     let grouped_measurements: Vec<Vec<Measurement>> = Measurement::belonging_to(devices)
-        .limit(3)
+        .limit(measurement_count)
         .order(time.desc())
         .load::<Measurement>(connection)?
         .grouped_by(devices);

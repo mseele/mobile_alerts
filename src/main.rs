@@ -69,7 +69,7 @@ fn check_for_open_windows(
     devices_to_check: &Vec<db::Device>,
 ) -> Result<(), ureq::Error> {
     // get measurements of devices to check
-    match db::get_measurements(&connection, devices_to_check) {
+    match db::get_measurements(&connection, devices_to_check, 3) {
         Ok(values) => {
             for value in values.iter() {
                 // check if window is open
