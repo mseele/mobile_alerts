@@ -112,6 +112,11 @@ pub fn run() -> Result<(), reqwest::Error> {
         .send()?
         .json::<APIResponse>()?;
 
+    if !data.success {
+        error!("mobile_alerts request was not successful: {:?}", data);
+        return Ok(())
+    }
+
     let mut devices_to_check: Vec<db::Device> = Vec::new();
 
     for measurement_device in data.devices.iter() {
