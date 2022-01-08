@@ -82,7 +82,7 @@ fn check(temperatures: &Vec<f64>, device_name: &str) -> Result<(), ureq::Error> 
     }
 }
 
-pub fn run() -> Result<(), ureq::Error> {
+fn run() -> Result<(), ureq::Error> {
     // establish database connection and fetch devices
     let connection = db::establish_connection();
     let devices = db::fetch_devices(&connection);
