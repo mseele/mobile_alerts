@@ -40,16 +40,6 @@ struct Measurement {
     h2: Option<f64>,
 }
 
-fn is_window_open(latest_temperature: &f64, temperature: &f64) -> bool {
-    trace!(
-        "calculate: {} - {} = {}",
-        temperature,
-        latest_temperature,
-        temperature - latest_temperature
-    );
-    temperature - latest_temperature >= 2.0
-}
-
 fn send_notification(device_name: &str) -> Result<(), ureq::Error> {
     let app_key = env::var("APP_KEY").expect("APP_KEY must be set");
     let app_secret = env::var("APP_SECRET").expect("APP_SECRET must be set");
@@ -62,6 +52,16 @@ fn send_notification(device_name: &str) -> Result<(), ureq::Error> {
     ];
     ureq::post("https://api.pushed.co/1/push").send_form(&params)?;
     Ok(())
+}
+
+fn is_window_open(latest_temperature: &f64, temperature: &f64) -> bool {
+    trace!(
+        "calculate: {} - {} = {}",
+        temperature,
+        latest_temperature,
+        temperature - latest_temperature
+    );
+    temperature - latest_temperature >= 2.0
 }
 
 fn check_for_open_windows(
