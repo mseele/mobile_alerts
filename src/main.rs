@@ -22,17 +22,17 @@ struct APIResponse {
 #[derive(Deserialize, Debug)]
 struct Device {
     deviceid: String,
-    lastseen: u32,
-    lowbattery: bool,
+    // lastseen: u32,
+    // lowbattery: bool,
     measurement: Measurement,
 }
 
 #[derive(Deserialize, Debug)]
 struct Measurement {
-    idx: u32,
+    // idx: u32,
     ts: u32,
-    c: u32,
-    lb: bool,
+    // c: u32,
+    // lb: bool,
     t1: f64,
     t2: Option<f64>,
     h: f64,
