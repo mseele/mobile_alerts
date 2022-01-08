@@ -6,6 +6,7 @@ extern crate log;
 mod db;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
+use diesel::PgConnection;
 use dotenv::dotenv;
 use log::{error, info, trace};
 use serde::Deserialize;
@@ -63,23 +64,45 @@ fn send_notification(device_name: &str) -> Result<(), ureq::Error> {
     Ok(())
 }
 
-fn check(temperatures: &Vec<f64>, device_name: &str) -> Result<(), ureq::Error> {
-    match temperatures.first() {
-        Some(latest_temperature) => {
-            for temperature in temperatures.iter().skip(1) {
-                if is_window_open(latest_temperature, temperature) {
-                    info!(
-                        "send alert for room {} (latest temp: {} / temp: {})",
-                        device_name, latest_temperature, temperature
-                    );
-                    send_notification(device_name)?;
-                    break;
+fn check_for_open_windows(
+    connection: &PgConnection,
+    devices_to_check: &Vec<db::Device>,
+) -> Result<(), ureq::Error> {
+    // get measurements of devices to check
+    match db::get_measurements(&connection, devices_to_check) {
+        Ok(values) => {
+            for value in values.iter() {
+                // check if window is open
+                let device_name = value.0.name.as_str();
+                let measurements = &value.1;
+                match measurements.first() {
+                    Some(latest_measurement) => {
+                        for measurement in measurements.iter().skip(1) {
+                            if is_window_open(
+                                &latest_measurement.temperature,
+                                &measurement.temperature,
+                            ) {
+                                info!(
+                                    "send alert for room {} (latest temp: {} / temp: {})",
+                                    device_name,
+                                    latest_measurement.temperature,
+                                    measurement.temperature
+                                );
+                                send_notification(device_name)?;
+                                break;
+                            }
+                        }
+                    }
+                    None => (),
                 }
             }
-            Ok(())
         }
-        None => Ok(()),
+        Err(e) => error!(
+            "getting measurements for devices ({:?}) failed: {}",
+            devices_to_check, e
+        ),
     }
+    Ok(())
 }
 
 fn run() -> Result<(), ureq::Error> {
@@ -152,32 +175,7 @@ fn run() -> Result<(), ureq::Error> {
         }
     }
 
-    match db::get_measurements(&connection, &devices_to_check) {
-        Ok(values) => {
-            let temperatures = values
-                .iter()
-                .map(|(id, values)| {
-                    (
-                        &id.name,
-                        values
-                            .iter()
-                            .map(|value| value.temperature)
-                            .collect::<Vec<_>>(),
-                    )
-                })
-                .collect::<Vec<_>>();
-
-            for value in temperatures {
-                check(&value.1, value.0)?;
-            }
-        }
-        Err(e) => error!(
-            "getting measurements for devices ({:?}) failed: {}",
-            devices_to_check, e
-        ),
-    }
-
-    Ok(())
+    check_for_open_windows(&connection, &devices_to_check)
 }
 
 fn main() {
