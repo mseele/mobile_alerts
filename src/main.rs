@@ -49,7 +49,7 @@ fn is_window_open(latest_temperature: &f64, temperature: &f64) -> bool {
     temperature - latest_temperature >= 2.0
 }
 
-fn send_notification(device_name: &str) -> Result<(), reqwest::Error> {
+fn send_notification(device_name: &str) -> Result<(), ureq::Error> {
     let app_key = env::var("APP_KEY").expect("APP_KEY must be set");
     let app_secret = env::var("APP_SECRET").expect("APP_SECRET must be set");
     let message = format!("Das Fenster im {} ist noch offen", device_name);
@@ -59,18 +59,11 @@ fn send_notification(device_name: &str) -> Result<(), reqwest::Error> {
         ("target_type", "app"),
         ("content", message.as_str()),
     ];
-    match reqwest::blocking::Client::new()
-        .post("https://api.pushed.co/1/push")
-        .form(&params)
-        .send()?
-        .error_for_status()
-    {
-        Ok(_) => Ok(()),
-        Err(error) => Err(error),
-    }
+    ureq::post("https://api.pushed.co/1/push").send_form(&params)?;
+    Ok(())
 }
 
-fn check(temperatures: &Vec<f64>, device_name: &str) -> Result<(), reqwest::Error> {
+fn check(temperatures: &Vec<f64>, device_name: &str) -> Result<(), ureq::Error> {
     match temperatures.first() {
         Some(latest_temperature) => {
             for temperature in temperatures.iter().skip(1) {
@@ -89,7 +82,7 @@ fn check(temperatures: &Vec<f64>, device_name: &str) -> Result<(), reqwest::Erro
     }
 }
 
-pub fn run() -> Result<(), reqwest::Error> {
+pub fn run() -> Result<(), ureq::Error> {
     // establish database connection and fetch devices
     let connection = db::establish_connection();
     let devices = db::fetch_devices(&connection);
@@ -105,16 +98,14 @@ pub fn run() -> Result<(), reqwest::Error> {
     // request device data
     let body = format!("phoneid={}&deviceids={}", phone_id, device_ids);
     trace!("request data for {}", body);
-    let data = reqwest::blocking::Client::new()
-        .post("https://www.data199.com/api/pv1/device/lastmeasurement")
-        .body(body)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .send()?
-        .json::<APIResponse>()?;
+    let data = ureq::post("https://www.data199.com/api/pv1/device/lastmeasurement")
+        .set("Content-Type", "application/x-www-form-urlencoded")
+        .send_string(body.as_str())?
+        .into_json::<APIResponse>()?;
 
     if !data.success {
         error!("mobile_alerts request was not successful: {:?}", data);
-        return Ok(())
+        return Ok(());
     }
 
     let mut devices_to_check: Vec<db::Device> = Vec::new();
