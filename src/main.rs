@@ -10,8 +10,8 @@ use dotenv::dotenv;
 use log::{error, info, trace};
 use serde::Deserialize;
 use std::env;
-use tokio::signal;
-use tokio::time::{interval, Duration};
+use std::sync::mpsc;
+use std::time::Duration;
 
 #[derive(Deserialize, Debug)]
 struct APIResponse {
@@ -49,7 +49,7 @@ fn is_window_open(latest_temperature: &f64, temperature: &f64) -> bool {
     temperature - latest_temperature >= 2.0
 }
 
-async fn send_notification(device_name: &str) -> Result<(), reqwest::Error> {
+fn send_notification(device_name: &str) -> Result<(), reqwest::Error> {
     let app_key = env::var("APP_KEY").expect("APP_KEY must be set");
     let app_secret = env::var("APP_SECRET").expect("APP_SECRET must be set");
     let message = format!("Das Fenster im {} ist noch offen", device_name);
@@ -59,11 +59,10 @@ async fn send_notification(device_name: &str) -> Result<(), reqwest::Error> {
         ("target_type", "app"),
         ("content", message.as_str()),
     ];
-    match reqwest::Client::new()
+    match reqwest::blocking::Client::new()
         .post("https://api.pushed.co/1/push")
         .form(&params)
-        .send()
-        .await?
+        .send()?
         .error_for_status()
     {
         Ok(_) => Ok(()),
@@ -71,7 +70,7 @@ async fn send_notification(device_name: &str) -> Result<(), reqwest::Error> {
     }
 }
 
-async fn check(temperatures: &Vec<f64>, device_name: &str) -> Result<(), reqwest::Error> {
+fn check(temperatures: &Vec<f64>, device_name: &str) -> Result<(), reqwest::Error> {
     match temperatures.first() {
         Some(latest_temperature) => {
             for temperature in temperatures.iter().skip(1) {
@@ -80,7 +79,7 @@ async fn check(temperatures: &Vec<f64>, device_name: &str) -> Result<(), reqwest
                         "send alert for room {} (latest temp: {} / temp: {})",
                         device_name, latest_temperature, temperature
                     );
-                    send_notification(device_name).await?;
+                    send_notification(device_name)?;
                     break;
                 }
             }
@@ -90,7 +89,7 @@ async fn check(temperatures: &Vec<f64>, device_name: &str) -> Result<(), reqwest
     }
 }
 
-pub async fn run() -> Result<(), reqwest::Error> {
+pub fn run() -> Result<(), reqwest::Error> {
     // establish database connection and fetch devices
     let connection = db::establish_connection();
     let devices = db::fetch_devices(&connection);
@@ -106,14 +105,12 @@ pub async fn run() -> Result<(), reqwest::Error> {
     // request device data
     let body = format!("phoneid={}&deviceids={}", phone_id, device_ids);
     trace!("request data for {}", body);
-    let data = reqwest::Client::new()
+    let data = reqwest::blocking::Client::new()
         .post("https://www.data199.com/api/pv1/device/lastmeasurement")
         .body(body)
         .header("Content-Type", "application/x-www-form-urlencoded")
-        .send()
-        .await?
-        .json::<APIResponse>()
-        .await?;
+        .send()?
+        .json::<APIResponse>()?;
 
     let mut devices_to_check: Vec<db::Device> = Vec::new();
 
@@ -152,7 +149,10 @@ pub async fn run() -> Result<(), reqwest::Error> {
                     Err(e) => error!("check for existence of measurement with device_id={} and time={} failed: {}", id, time, e),
                 }
             }
-            None => error!("find no matching device for result device {:?}", measurement_device),
+            None => error!(
+                "find no matching device for result device {:?}",
+                measurement_device
+            ),
         }
     }
 
@@ -167,38 +167,47 @@ pub async fn run() -> Result<(), reqwest::Error> {
                 ));
             }
         }
-        Err(e) => error!("getting measurements for devices ({:?}) failed: {}", devices_to_check, e),
+        Err(e) => error!(
+            "getting measurements for devices ({:?}) failed: {}",
+            devices_to_check, e
+        ),
     }
 
     for value in temperatures {
-        check(&value.1, value.0).await?;
+        check(&value.1, value.0)?;
     }
 
     Ok(())
 }
 
-async fn manage_timer() {
-    let mut interval = interval(Duration::from_secs(60));
-    loop {
-        interval.tick().await;
-        let result = run().await;
-        if result.is_err() {
-            error!("error: {:?}", result.err());
-        }
-    }
-}
-
-#[tokio::main]
-async fn main() {
+fn main() {
     dotenv().ok();
     env_logger::init();
 
     trace!("starting up");
 
-    // start a timer
-    tokio::spawn(manage_timer());
-    // wait until ctrl_c has been pressed
-    signal::ctrl_c().await.expect("failed to listen for ctrl_c");
+    // create a channel to handle the application shutdown
+    let (shutdown, shutdown_receiver) = mpsc::channel();
+
+    // listen to ctrl_c and stop the application by sending a signal to the channel
+    ctrlc::set_handler(move || {
+        trace!("received ctrl_c");
+        shutdown.send(()).expect("failed to send shutdown event");
+    })
+    .expect("failed to listen for ctrl_c");
+
+    // continuously execute the run method until the shutdown signal will be send
+    let duration = Duration::from_secs(60);
+    loop {
+        let result = run();
+        if result.is_err() {
+            error!("failure while running the logic: {:?}", result.err());
+        }
+        match shutdown_receiver.recv_timeout(duration) {
+            Ok(_) => break,
+            Err(e) => trace!("waiting for shutdown_receiver failed: {}", e),
+        }
+    }
 
     trace!("shutdown");
 }
