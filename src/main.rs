@@ -152,25 +152,29 @@ pub fn run() -> Result<(), ureq::Error> {
         }
     }
 
-    let mut temperatures: Vec<(&String, Vec<f64>)> = Vec::new();
-
     match db::get_measurements(&connection, &devices_to_check) {
         Ok(values) => {
-            for value in values {
-                temperatures.push((
-                    &value.0.name,
-                    value.1.iter().map(|m| m.temperature).collect::<Vec<_>>(),
-                ));
+            let temperatures = values
+                .iter()
+                .map(|(id, values)| {
+                    (
+                        &id.name,
+                        values
+                            .iter()
+                            .map(|value| value.temperature)
+                            .collect::<Vec<_>>(),
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            for value in temperatures {
+                check(&value.1, value.0)?;
             }
         }
         Err(e) => error!(
             "getting measurements for devices ({:?}) failed: {}",
             devices_to_check, e
         ),
-    }
-
-    for value in temperatures {
-        check(&value.1, value.0)?;
     }
 
     Ok(())
