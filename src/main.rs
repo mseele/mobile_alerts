@@ -5,6 +5,7 @@ extern crate log;
 
 mod db;
 
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use diesel::PgConnection;
 use dotenv::dotenv;
@@ -40,7 +41,7 @@ struct Measurement {
     h2: Option<f64>,
 }
 
-fn send_notification(device_name: &str) -> Result<(), ureq::Error> {
+fn send_notification(device_name: &str) -> Result<()> {
     let app_key = env::var("APP_KEY").expect("APP_KEY must be set");
     let app_secret = env::var("APP_SECRET").expect("APP_SECRET must be set");
     let message = format!("Das Fenster im {} ist noch offen", device_name);
@@ -67,7 +68,7 @@ fn is_window_open(latest_temperature: &f64, temperature: &f64) -> bool {
 fn check_for_open_windows(
     connection: &mut PgConnection,
     devices_to_check: &Vec<db::Device>,
-) -> Result<(), ureq::Error> {
+) -> Result<()> {
     // get measurements of devices to check
     match db::get_measurements(connection, devices_to_check, 3) {
         Ok(values) => {
@@ -100,7 +101,7 @@ fn check_for_open_windows(
     Ok(())
 }
 
-fn run() -> Result<(), ureq::Error> {
+fn run() -> Result<()> {
     // establish database connection and fetch devices
     let mut connection = db::establish_connection();
     let devices = db::fetch_devices(&mut connection);
