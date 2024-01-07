@@ -10,7 +10,7 @@ use schema::measurements;
 use std::env;
 
 #[derive(Identifiable, Queryable, Clone, Debug)]
-#[table_name = "devices"]
+#[diesel(table_name = devices)]
 pub struct Device {
     pub id: i32,
     pub device_id: String,
@@ -19,8 +19,8 @@ pub struct Device {
 }
 
 #[derive(Identifiable, Queryable, Associations, Debug)]
-#[table_name = "measurements"]
-#[belongs_to(Device)]
+#[diesel(table_name = measurements)]
+#[diesel(belongs_to(Device))]
 pub struct Measurement {
     pub id: i32,
     pub device_id: i32,
@@ -32,7 +32,7 @@ pub struct Measurement {
 }
 
 #[derive(Insertable, Debug)]
-#[table_name = "measurements"]
+#[diesel(table_name = measurements)]
 pub struct NewMeasurement<'a> {
     pub device_id: i32,
     pub time: &'a DateTime<Utc>,
