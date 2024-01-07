@@ -136,10 +136,8 @@ fn run() -> Result<(), ureq::Error> {
             Some(device) => {
                 let id = device.id;
                 let measurement = &measurement_device.measurement;
-                let time = DateTime::<Utc>::from_utc(
-                    NaiveDateTime::from_timestamp(measurement.ts.into(), 0),
-                    Utc,
-                );
+                let time = DateTime::<Utc>::from_timestamp(measurement.ts.into(), 0)
+                    .unwrap_or_else(|| panic!("invalid timestamp {}", measurement.ts));
                 match db::measurement_exists(&mut connection, id, &time) {
                     Ok(exists) => {
                         if !exists {
