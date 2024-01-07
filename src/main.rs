@@ -75,25 +75,20 @@ fn check_for_open_windows(
                 // check if window is open
                 let device_name = value.0.name.as_str();
                 let measurements = &value.1;
-                match measurements.first() {
-                    Some(latest_measurement) => {
-                        for measurement in measurements.iter().skip(1) {
-                            if is_window_open(
-                                &latest_measurement.temperature,
-                                &measurement.temperature,
-                            ) {
-                                info!(
-                                    "send alert for room {} (latest temp: {} / temp: {})",
-                                    device_name,
-                                    latest_measurement.temperature,
-                                    measurement.temperature
-                                );
-                                send_notification(device_name)?;
-                                break;
-                            }
+                if let Some(latest_measurement) = measurements.first() {
+                    for measurement in measurements.iter().skip(1) {
+                        if is_window_open(&latest_measurement.temperature, &measurement.temperature)
+                        {
+                            info!(
+                                "send alert for room {} (latest temp: {} / temp: {})",
+                                device_name,
+                                latest_measurement.temperature,
+                                measurement.temperature
+                            );
+                            send_notification(device_name)?;
+                            break;
                         }
                     }
-                    None => (),
                 }
             }
         }
@@ -136,7 +131,7 @@ fn run() -> Result<(), ureq::Error> {
     for measurement_device in data.devices.iter() {
         let device = devices
             .iter()
-            .find(|&device| &device.device_id == &measurement_device.deviceid);
+            .find(|&device| device.device_id == measurement_device.deviceid);
         match device {
             Some(device) => {
                 let id = device.id;
