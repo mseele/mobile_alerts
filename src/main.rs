@@ -65,11 +65,11 @@ fn is_window_open(latest_temperature: &f64, temperature: &f64) -> bool {
 }
 
 fn check_for_open_windows(
-    connection: &PgConnection,
+    connection: &mut PgConnection,
     devices_to_check: &Vec<db::Device>,
 ) -> Result<(), ureq::Error> {
     // get measurements of devices to check
-    match db::get_measurements(&connection, devices_to_check, 3) {
+    match db::get_measurements(connection, devices_to_check, 3) {
         Ok(values) => {
             for value in values.iter() {
                 // check if window is open
@@ -107,8 +107,8 @@ fn check_for_open_windows(
 
 fn run() -> Result<(), ureq::Error> {
     // establish database connection and fetch devices
-    let connection = db::establish_connection();
-    let devices = db::fetch_devices(&connection);
+    let mut connection = db::establish_connection();
+    let devices = db::fetch_devices(&mut connection);
 
     // get phone id and concat device ids for the http request
     let phone_id = env::var("PHONE_ID").expect("PHONE_ID must be set");
@@ -145,7 +145,7 @@ fn run() -> Result<(), ureq::Error> {
                     NaiveDateTime::from_timestamp(measurement.ts.into(), 0),
                     Utc,
                 );
-                match db::measurement_exists(&connection, id, &time) {
+                match db::measurement_exists(&mut connection, id, &time) {
                     Ok(exists) => {
                         if !exists {
                             let new_measurement = db::NewMeasurement::new(
@@ -156,7 +156,7 @@ fn run() -> Result<(), ureq::Error> {
                                 measurement.t2,
                                 measurement.h2,
                             );
-                            match db::insert_measurement(&connection, &new_measurement) {
+                            match db::insert_measurement(&mut connection, &new_measurement) {
                                 Ok(_) => trace!("new measurement has been inserted into database: {:?}", new_measurement),                                
                                 Err(e) => error!("inserting a new measurement ({:?}) failed: {}", new_measurement, e),
                             }
@@ -175,7 +175,7 @@ fn run() -> Result<(), ureq::Error> {
         }
     }
 
-    check_for_open_windows(&connection, &devices_to_check)
+    check_for_open_windows(&mut connection, &devices_to_check)
 }
 
 fn main() {

@@ -67,7 +67,7 @@ pub fn establish_connection() -> PgConnection {
     PgConnection::establish(&database_url).expect(&format!("Error connecting to {}", database_url))
 }
 
-pub fn fetch_devices(connection: &PgConnection) -> Vec<Device> {
+pub fn fetch_devices(connection: &mut PgConnection) -> Vec<Device> {
     use schema::devices::dsl::*;
 
     devices
@@ -76,7 +76,7 @@ pub fn fetch_devices(connection: &PgConnection) -> Vec<Device> {
 }
 
 pub fn measurement_exists(
-    connection: &PgConnection,
+    connection: &mut PgConnection,
     id: i32,
     timestamp: &DateTime<Utc>,
 ) -> Result<bool, Error> {
@@ -89,7 +89,7 @@ pub fn measurement_exists(
 }
 
 pub fn insert_measurement(
-    connection: &PgConnection,
+    connection: &mut PgConnection,
     measurement: &NewMeasurement,
 ) -> Result<usize, Error> {
     use schema::measurements::dsl::*;
@@ -100,7 +100,7 @@ pub fn insert_measurement(
 }
 
 pub fn get_measurements<'a>(
-    connection: &PgConnection,
+    connection: &mut PgConnection,
     devices: &'a Vec<Device>,
     measurement_count: i64,
 ) -> Result<Vec<(&'a Device, Vec<Measurement>)>, Error> {
