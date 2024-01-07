@@ -5,7 +5,7 @@ extern crate log;
 
 mod db;
 
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, Utc};
 use diesel::PgConnection;
 use dotenv::dotenv;
 use log::{error, info, trace};
