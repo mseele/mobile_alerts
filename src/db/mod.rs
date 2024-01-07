@@ -19,8 +19,7 @@ pub struct Device {
 }
 
 #[derive(Identifiable, Queryable, Associations, Debug)]
-#[diesel(table_name = measurements)]
-#[diesel(belongs_to(Device))]
+#[diesel(table_name = measurements, belongs_to(Device))]
 pub struct Measurement {
     pub id: i32,
     pub device_id: i32,
@@ -64,7 +63,8 @@ impl NewMeasurement<'_> {
 
 pub fn establish_connection() -> PgConnection {
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    PgConnection::establish(&database_url).unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
+    PgConnection::establish(&database_url)
+        .unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
 }
 
 pub fn fetch_devices(connection: &mut PgConnection) -> Vec<Device> {
@@ -111,10 +111,7 @@ pub fn get_measurements<'a>(
         .order(time.desc())
         .load::<Measurement>(connection)?
         .grouped_by(devices);
-    let result = devices
-        .iter()
-        .zip(grouped_measurements)
-        .collect::<Vec<_>>();
+    let result = devices.iter().zip(grouped_measurements).collect::<Vec<_>>();
 
     Ok(result)
 }
